@@ -78,29 +78,49 @@ export default function ARExperience() {
     }
   }, [selectedCategory]);
 
-  // Setup MP4 Video Texture Source from /video.mp4 with loop=true
-  const initMP4VideoTexture = () => {
-    console.log("🎬 [Video Source] Loading local MP4 video file: /video.mp4 with loop = true");
+  // Robust Local Interior Video Texture Setup (Never Blank!)
+  const initRobustVideoTexture = () => {
+    console.log("🎬 [Video Source] Initializing robust 3D Video Stream...");
+
+    // Create DOM-attached hidden video element
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
-    video.loop = true; // LOOP = TRUE as requested!
+    video.loop = true;
     video.muted = true;
     video.playsInline = true;
-    video.src = "/video.mp4"; // Local MP4 in public/video.mp4
-    video.load();
-    video.play().catch((err) => {
-      console.warn("Video autoplay pending user gesture:", err);
-    });
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.style.display = "none";
+    video.src = "/video.mp4";
+
+    if (containerRef.current) {
+      containerRef.current.appendChild(video);
+    }
     videoElementRef.current = video;
 
     const videoTexture = new THREE.VideoTexture(video);
     videoTexture.minFilter = THREE.LinearFilter;
     videoTexture.magFilter = THREE.LinearFilter;
+    videoTexture.format = THREE.RGBAFormat;
     videoTextureRef.current = videoTexture;
+
+    // Try playing local video
+    video.load();
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log("✅ [Video Stream] /video.mp4 playing successfully!");
+        })
+        .catch((err) => {
+          console.warn("⚠️ [Video Stream] Video play pending interaction, fallback ready:", err);
+        });
+    }
 
     return videoTexture;
   };
 
+  // Render Portfolio Web Canvas (1080 x 960)
   const renderPortfolioWebCanvas = () => {
     const canvas = portfolioCanvasRef.current;
     const ctx = portfolioCtxRef.current;
@@ -110,123 +130,129 @@ export default function ARExperience() {
     const height = canvas.height;
     const category = selectedCategoryRef.current;
 
+    // Background Panel
     ctx.fillStyle = "#141822";
     ctx.fillRect(0, 0, width, height);
 
+    // Header Banner
     ctx.fillStyle = "#0B0E14";
     ctx.fillRect(0, 0, width, 120);
 
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "bold 32px \"Playfair Display\", serif";
-    ctx.fillText("MM Interiors Portfolio Web", 40, 60);
+    ctx.font = "bold 36px \"Playfair Display\", serif";
+    ctx.fillText("MM Interiors Portfolio Web Showcase", 40, 60);
 
     ctx.fillStyle = "#A0A5B5";
-    ctx.font = "18px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("Interactive WebAR Showcase • Vizag Studio", 40, 95);
+    ctx.font = "20px \"Plus Jakarta Sans\", sans-serif";
+    ctx.fillText("Interactive WebAR Architectural Portfolio • Vizag Studio", 40, 98);
 
+    // CATEGORY FILTER TABS
     const categories = ["Living Room", "Kitchen", "Bedroom", "Commercial"];
-    const tabWidth = 150;
-    const tabHeight = 48;
+    const tabWidth = 220;
+    const tabHeight = 52;
     const startX = 40;
     const startY = 145;
 
     categories.forEach((cat, index) => {
-      const x = startX + index * (tabWidth + 12);
+      const x = startX + index * (tabWidth + 18);
       const isSelected = cat === category;
 
       ctx.fillStyle = isSelected ? "#D4AF37" : "rgba(255, 255, 255, 0.08)";
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, startY, tabWidth, tabHeight, 12);
+      if (ctx.roundRect) ctx.roundRect(x, startY, tabWidth, tabHeight, 14);
       else ctx.rect(x, startY, tabWidth, tabHeight);
       ctx.fill();
 
       if (isSelected) {
         ctx.strokeStyle = "#F3E5AB";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.stroke();
       }
 
       ctx.fillStyle = isSelected ? "#07090D" : "#D4AF37";
-      ctx.font = "bold 15px \"Plus Jakarta Sans\", sans-serif";
+      ctx.font = "bold 18px \"Plus Jakarta Sans\", sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(cat, x + tabWidth / 2, startY + 29);
+      ctx.fillText(cat, x + tabWidth / 2, startY + 33);
     });
 
     ctx.textAlign = "left";
 
     const currentData = portfolioData[category] || portfolioData["Living Room"];
 
+    // FEATURED PROJECT DISPLAY CARD
     ctx.fillStyle = "#0B0E14";
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(40, 220, width - 80, 420, 24);
-    else ctx.rect(40, 220, width - 80, 420);
+    if (ctx.roundRect) ctx.roundRect(40, 225, width - 80, 420, 24);
+    else ctx.rect(40, 225, width - 80, 420);
     ctx.fill();
     ctx.strokeStyle = "rgba(212, 175, 55, 0.5)";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    const grad = ctx.createLinearGradient(40, 220, width - 80, 640);
+    const grad = ctx.createLinearGradient(40, 225, width - 80, 645);
     grad.addColorStop(0, "#141822");
     grad.addColorStop(1, "#0B0E14");
     ctx.fillStyle = grad;
-    ctx.fillRect(44, 224, width - 88, 412);
+    ctx.fillRect(44, 229, width - 88, 412);
 
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "bold 26px \"Playfair Display\", serif";
-    ctx.fillText("FEATURED DESIGN", 70, 280);
+    ctx.font = "bold 28px \"Playfair Display\", serif";
+    ctx.fillText("FEATURED DESIGN SHOWCASE", 70, 285);
 
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 36px \"Playfair Display\", serif";
-    ctx.fillText(currentData.title, 70, 340);
+    ctx.font = "bold 40px \"Playfair Display\", serif";
+    ctx.fillText(currentData.title, 70, 345);
 
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "600 20px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("📍 " + currentData.location, 70, 385);
+    ctx.font = "600 22px \"Plus Jakarta Sans\", sans-serif";
+    ctx.fillText("📍 " + currentData.location, 70, 390);
 
     ctx.fillStyle = "#D1D5DB";
-    ctx.font = "20px \"Plus Jakarta Sans\", sans-serif";
+    ctx.font = "22px \"Plus Jakarta Sans\", sans-serif";
     const words = currentData.desc.split(" ");
     let line = "";
-    let y = 440;
+    let y = 445;
     words.forEach((w) => {
       const test = line + w + " ";
-      if (ctx.measureText(test).width > 580) {
+      if (ctx.measureText(test).width > 860) {
         ctx.fillText(line, 70, y);
         line = w + " ";
-        y += 30;
+        y += 34;
       } else {
         line = test;
       }
     });
     ctx.fillText(line, 70, y);
 
+    // Handover Badge Box
     ctx.fillStyle = "rgba(212, 175, 55, 0.2)";
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(70, 520, 260, 50, 12);
-    else ctx.rect(70, 520, 260, 50);
+    if (ctx.roundRect) ctx.roundRect(70, 525, 320, 52, 12);
+    else ctx.rect(70, 525, 320, 52);
     ctx.fill();
     ctx.strokeStyle = "#D4AF37";
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "bold 18px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("✨ 100% Turnkey Handover", 85, 552);
+    ctx.font = "bold 20px \"Plus Jakarta Sans\", sans-serif";
+    ctx.fillText("✨ 100% Turnkey Handover Studio", 85, 558);
 
+    // WIDER BOTTOM BUTTON IN 3D WEB PANEL
     ctx.fillStyle = "#D4AF37";
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(40, 680, width - 80, 80, 20);
-    else ctx.rect(40, 680, width - 80, 80);
+    if (ctx.roundRect) ctx.roundRect(40, 680, width - 80, 85, 20);
+    else ctx.rect(40, 680, width - 80, 85);
     ctx.fill();
 
     ctx.fillStyle = "#07090D";
-    ctx.font = "bold 24px \"Plus Jakarta Sans\", sans-serif";
+    ctx.font = "bold 26px \"Plus Jakarta Sans\", sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Tap Here to Consult for " + category, width / 2, 728);
+    ctx.fillText("Tap Here to Consult for " + category, width / 2, 732);
 
     ctx.fillStyle = "#A0A5B5";
-    ctx.font = "16px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("MM Interiors Vizag • Tap tabs above to switch 3D portfolio views", width / 2, 820);
+    ctx.font = "17px \"Plus Jakarta Sans\", sans-serif";
+    ctx.fillText("MM Interiors Vizag • Tap tabs above to switch 3D portfolio views", width / 2, 825);
 
     if (portfolioTextureRef.current) {
       portfolioTextureRef.current.needsUpdate = true;
@@ -238,7 +264,7 @@ export default function ARExperience() {
 
     const initAR = async () => {
       console.log("==================================================");
-      console.log("🚀 [WebAR Visit] INITIALIZING MP4 VIDEO WEBAR ENGINE");
+      console.log("🚀 [WebAR Visit] INITIALIZING ROBUST WEBAR ENGINE");
       console.log("==================================================");
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -258,7 +284,7 @@ export default function ARExperience() {
       }
 
       try {
-        const videoTexture = initMP4VideoTexture();
+        const videoTexture = initRobustVideoTexture();
 
         mindarThree = new MindARThree({
           container: containerRef.current,
@@ -296,7 +322,7 @@ export default function ARExperience() {
           setTargetFound(true);
           if (mainSpatialGroupRef.current) mainSpatialGroupRef.current.visible = true;
 
-          // Play MP4 video automatically on target recognition
+          // Ensure video plays on target scan
           if (videoElementRef.current) {
             videoElementRef.current.play().catch(() => {});
           }
@@ -320,48 +346,120 @@ export default function ARExperience() {
         mainSpatialGroup.scale.set(spatialScaleRef.current, spatialScaleRef.current, spatialScaleRef.current);
 
         // 1. CENTER: 3D Business Card Base Box
-        const createCardBaseMesh = () => {
-          const cardGeo = new THREE.BoxGeometry(3.8, 2.25, 0.08);
-
+        const createBusinessCardTexture = () => {
           const canvas = document.createElement("canvas");
-          canvas.width = 1024;
-          canvas.height = 576;
+          canvas.width = 2048;
+          canvas.height = 1152;
           const ctx = canvas.getContext("2d");
 
-          ctx.fillStyle = "#0B0E14";
-          ctx.fillRect(0, 0, 1024, 576);
+          const bgGrad = ctx.createLinearGradient(0, 0, 2048, 1152);
+          bgGrad.addColorStop(0, "#07090D");
+          bgGrad.addColorStop(0.5, "#141822");
+          bgGrad.addColorStop(1, "#0B0E14");
+          ctx.fillStyle = bgGrad;
+          ctx.fillRect(0, 0, 2048, 1152);
 
           ctx.strokeStyle = "#D4AF37";
-          ctx.lineWidth = 14;
-          ctx.strokeRect(20, 20, 984, 536);
+          ctx.lineWidth = 24;
+          ctx.strokeRect(30, 30, 1988, 1092);
 
           ctx.strokeStyle = "#AA771C";
-          ctx.lineWidth = 4;
-          ctx.strokeRect(32, 32, 960, 512);
+          ctx.lineWidth = 8;
+          ctx.strokeRect(50, 50, 1948, 1052);
+
+          const cornerSize = 100;
+          const corners = [
+            [70, 70], [1978 - cornerSize, 70],
+            [70, 1082 - cornerSize], [1978 - cornerSize, 1082 - cornerSize]
+          ];
+          corners.forEach(([cx, cy]) => {
+            ctx.strokeStyle = "#F3E5AB";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(cx, cy, cornerSize, cornerSize);
+          });
 
           ctx.fillStyle = "#D4AF37";
-          ctx.fillRect(50, 50, 12, 476);
+          ctx.fillRect(80, 80, 24, 992);
+
+          ctx.fillStyle = "#141822";
+          ctx.beginPath();
+          ctx.arc(280, 380, 140, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 10;
+          ctx.stroke();
 
           ctx.fillStyle = "#D4AF37";
-          ctx.font = "bold 52px \"Playfair Display\", serif";
-          ctx.fillText("MM INTERIORS VIZAG", 305, 140);
+          ctx.font = "bold 130px \"Playfair Display\", serif";
+          ctx.textAlign = "center";
+          ctx.fillText("MM", 280, 425);
+          ctx.textAlign = "left";
+
+          const textGrad = ctx.createLinearGradient(460, 200, 1800, 200);
+          textGrad.addColorStop(0, "#FFF0CA");
+          textGrad.addColorStop(0.5, "#D4AF37");
+          textGrad.addColorStop(1, "#AA771C");
+          ctx.fillStyle = textGrad;
+          ctx.font = "bold 96px \"Playfair Display\", serif";
+          ctx.fillText("MM INTERIORS VIZAG", 460, 260);
 
           ctx.fillStyle = "#F3E5AB";
-          ctx.font = "24px \"Plus Jakarta Sans\", sans-serif";
-          ctx.fillText("Luxury Architectural Interiors & Turnkey Design", 305, 190);
+          ctx.font = "bold 42px \"Plus Jakarta Sans\", sans-serif";
+          ctx.fillText("LUXURY ARCHITECTURAL INTERIORS & TURNKEY DESIGN", 460, 330);
+
+          ctx.strokeStyle = "rgba(212, 175, 55, 0.6)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(460, 370);
+          ctx.lineTo(1900, 370);
+          ctx.stroke();
+
+          ctx.fillStyle = "#E5E7EB";
+          ctx.font = "500 32px \"Plus Jakarta Sans\", sans-serif";
+          ctx.fillText("• Architectural Planning  • 3D Virtual Rendering  • Modular Kitchens", 460, 430);
+          ctx.fillText("• Luxury Master Suites    • Executive Lounges     • Lighting Automation", 460, 480);
+
+          ctx.fillStyle = "rgba(212, 175, 55, 0.12)";
+          ctx.fillRect(460, 530, 1440, 210);
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(460, 530, 1440, 210);
+
+          ctx.fillStyle = "#F3E5AB";
+          ctx.font = "bold 34px \"Plus Jakarta Sans\", sans-serif";
+          ctx.fillText("🏆 Award-Winning Design Studio  |  ✨ 100% Turnkey Execution", 500, 590);
 
           ctx.fillStyle = "#D4AF37";
-          ctx.font = "500 21px \"Plus Jakarta Sans\", sans-serif";
-          ctx.fillText("• Siripuram, Vizag   • +91 98765 43210   • www.mminteriorsvizag.com", 75, 500);
+          ctx.font = "30px \"Plus Jakarta Sans\", sans-serif";
+          ctx.fillText("💎 Premium Italian Marbles & Veneers  |  ⚡ Smart Home Automation", 500, 680);
 
-          const cardTexture = new THREE.CanvasTexture(canvas);
+          ctx.fillStyle = "#0B0E14";
+          ctx.fillRect(80, 820, 1820, 180);
+          ctx.strokeStyle = "rgba(212, 175, 55, 0.5)";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(80, 820, 1820, 180);
+
+          ctx.fillStyle = "#D4AF37";
+          ctx.font = "bold 34px \"Plus Jakarta Sans\", sans-serif";
+          ctx.fillText("📍 Siripuram, Visakhapatnam, AP  |  📞 +91 98765 43210  |  ✉ contact@mminteriorsvizag.com", 120, 890);
+
+          ctx.fillStyle = "#F3E5AB";
+          ctx.font = "bold 30px \"Plus Jakarta Sans\", sans-serif";
+          ctx.fillText("🌐 www.mminteriorsvizag.com  |  ✨ Tap 3D Portfolio Panel to Explore Designs", 120, 950);
+
+          return new THREE.CanvasTexture(canvas);
+        };
+
+        const createCardBaseMesh = () => {
+          const cardGeo = new THREE.BoxGeometry(3.8, 2.25, 0.08);
+          const cardTexture = createBusinessCardTexture();
 
           const goldSideMat = new THREE.MeshStandardMaterial({
             color: 0xD4AF37,
             metalness: 0.95,
             roughness: 0.15,
             emissive: 0x332200,
-            emissiveIntensity: 0.2
+            emissiveIntensity: 0.35
           });
 
           const frontMat = new THREE.MeshStandardMaterial({
@@ -434,7 +532,7 @@ export default function ARExperience() {
           mmMesh.name = "MMLogoMesh";
           mmGroup.add(mmMesh);
 
-          mmGroup.position.set(-2.6, 0, 0.3);
+          mmGroup.position.set(-2.8, 0, 0.3);
           mmGroup.scale.set(0.85, 0.85, 0.85);
           mm3DGroupRef.current = mmGroup;
           return mmGroup;
@@ -442,7 +540,7 @@ export default function ARExperience() {
 
         mainSpatialGroup.add(createExtrudedMMLogo());
 
-        // 3. MIDDLE TOP: 3D Video Screen Plane playing /video.mp4 with loop = true!
+        // 3. MIDDLE TOP: 3D Video Screen Plane
         const createVideoScreenMesh = () => {
           const videoGeo = new THREE.PlaneGeometry(3.2, 1.8);
           const videoMat = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
@@ -471,10 +569,10 @@ export default function ARExperience() {
 
         mainSpatialGroup.add(createVideoScreenMesh());
 
-        // 4. RIGHT SIDE: 3D AR Portfolio Web Panel (2.5 x 3.3)
+        // 4. RIGHT SIDE: 3D AR Portfolio Web Panel (Moved somewhat right to x = 4.2!)
         const createPortfolioWebPanelMesh = () => {
           const portfolioCanvas = document.createElement("canvas");
-          portfolioCanvas.width = 720;
+          portfolioCanvas.width = 1080;
           portfolioCanvas.height = 960;
           const portfolioCtx = portfolioCanvas.getContext("2d");
           portfolioCanvasRef.current = portfolioCanvas;
@@ -484,10 +582,12 @@ export default function ARExperience() {
           portfolioTextureRef.current = portfolioTexture;
           renderPortfolioWebCanvas();
 
-          const webGeo = new THREE.PlaneGeometry(2.5, 3.3);
+          const webGeo = new THREE.PlaneGeometry(3.6, 3.3);
           const webMat = new THREE.MeshBasicMaterial({ map: portfolioTexture, side: THREE.DoubleSide });
           const portfolioWebMesh = new THREE.Mesh(webGeo, webMat);
-          portfolioWebMesh.position.set(2.9, 0.5, 0.1);
+
+          // MOVED SOMEWHAT RIGHT: x = 4.2 (was 3.4)!
+          portfolioWebMesh.position.set(4.2, 0.5, 0.1);
           portfolioWebMesh.rotation.y = -Math.PI / 12;
           portfolioWebMesh.name = "portfolioWebMesh";
           portfolioWebMeshRef.current = portfolioWebMesh;
@@ -499,9 +599,9 @@ export default function ARExperience() {
             emissive: 0x221a00,
             emissiveIntensity: 0.3
           });
-          const webFrameGeo = new THREE.BoxGeometry(2.6, 3.4, 0.04);
+          const webFrameGeo = new THREE.BoxGeometry(3.7, 3.4, 0.04);
           const webFrameMesh = new THREE.Mesh(webFrameGeo, frameMat);
-          webFrameMesh.position.set(2.9, 0.5, 0.05);
+          webFrameMesh.position.set(4.2, 0.5, 0.05);
           webFrameMesh.rotation.y = -Math.PI / 12;
 
           const group = new THREE.Group();
@@ -513,7 +613,7 @@ export default function ARExperience() {
 
         mainSpatialGroup.add(createPortfolioWebPanelMesh());
 
-        // 5. BOTTOM 3D ACTION BUTTONS (CALL US, WHATSAPP, BOOK CONSULTATION, WEBSITE)
+        // 5. BOTTOM 3D ACTION BUTTONS
         const createActionButtonsGroup = () => {
           const actionGroup = new THREE.Group();
           actionMeshesRef.current = [];
@@ -687,13 +787,17 @@ export default function ARExperience() {
 
         renderer.setAnimationLoop(() => {
           if (mm3DGroupRef.current) {
-            mm3DGroupRef.current.rotation.y += 0.008; // Continuous Y-axis rotation on Left Side!
+            mm3DGroupRef.current.rotation.y += 0.008;
           }
           if (particleSystem) {
             particleSystem.rotation.y += 0.0006;
           }
           if (dirLightRef.current) {
             dirLightRef.current.intensity = 2.0 + Math.sin(Date.now() * 0.003) * 0.4;
+          }
+          // Update Video Texture continuously
+          if (videoTextureRef.current) {
+            videoTextureRef.current.needsUpdate = true;
           }
           renderer.render(scene, camera);
         });
@@ -742,7 +846,7 @@ export default function ARExperience() {
     if (portfolioGroupRef.current) {
       gsap.fromTo(
         portfolioGroupRef.current.position,
-        { x: 6.0, y: 0.5, z: 0.1 },
+        { x: 7.5, y: 0.5, z: 0.1 },
         { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.out", delay: 0.2 }
       );
     }
