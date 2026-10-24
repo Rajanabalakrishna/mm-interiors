@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>MM Interiors Vizag - WebAR 3D Experience</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              gold: {
+                100: "#FDF8EA",
+                300: "#F3E5AB",
+                500: "#D4AF37",
+                600: "#C5A059",
+                700: "#AA771C",
+              },
+              charcoal: {
+                800: "#141822",
+                900: "#0B0E14",
+                950: "#07090D"
+              },
+              cream: "#F8F6F0"
+            },
+            fontFamily: {
+              serif: ["\"Playfair Display\"", "serif"],
+              sans: ["\"Plus Jakarta Sans\"", "sans-serif"],
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      body {
+        font-family: "Plus Jakarta Sans", sans-serif;
+        background-color: #07090D;
+        color: #F8F6F0;
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        touch-action: manipulation;
+      }
+
+      .glass-panel {
+        background: rgba(11, 14, 20, 0.85);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(212, 175, 55, 0.35);
+      }
+
+      .gold-gradient-text {
+        background: linear-gradient(135deg, #FFF0CA 0%, #D4AF37 50%, #AA771C 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .gold-btn {
+        background: linear-gradient(135deg, #D4AF37 0%, #AA771C 100%);
+        color: #07090D;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .gold-btn:hover {
+        background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 100%);
+        box-shadow: 0 0 22px rgba(212, 175, 55, 0.5);
+        transform: translateY(-2px);
+      }
+
+      @keyframes scanPulse {
+        0% { border-color: rgba(212, 175, 55, 0.3); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.2); }
+        50% { border-color: rgba(212, 175, 55, 0.9); box-shadow: 0 0 30px 6px rgba(212, 175, 55, 0.45); }
+        100% { border-color: rgba(212, 175, 55, 0.3); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.2); }
+      }
+
+      .ar-scanner-frame {
+        animation: scanPulse 2.5s infinite ease-in-out;
+      }
+
+      ::-webkit-scrollbar {
+        width: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(11, 14, 20, 0.8);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #D4AF37;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body class="relative w-screen h-screen select-none">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
