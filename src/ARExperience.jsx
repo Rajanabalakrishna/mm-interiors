@@ -34,6 +34,7 @@ export default function ARExperience() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [showConsultModal, setShowConsultModal] = useState(false);
 
   // References
   const mindarRef = useRef(null);
@@ -41,17 +42,27 @@ export default function ARExperience() {
   const sceneRef = useRef(null);
   const anchorGroupRef = useRef(null);
   const mainSpatialGroupRef = useRef(null);
+  const cardMeshRef = useRef(null);
   const mm3DGroupRef = useRef(null);
+  const videoGroupRef = useRef(null);
+  const portfolioGroupRef = useRef(null);
   const portfolioCanvasRef = useRef(null);
   const portfolioTextureRef = useRef(null);
   const portfolioCtxRef = useRef(null);
-  const videoCanvasRef = useRef(null);
+  const videoElementRef = useRef(null);
   const videoTextureRef = useRef(null);
   const selectedCategoryRef = useRef("Living Room");
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
   const portfolioWebMeshRef = useRef(null);
   const videoMeshRef = useRef(null);
+  const actionMeshesRef = useRef([]);
+  const dirLightRef = useRef(null);
+
+  // Pinch Zoom Gesture References
+  const initialPinchDistRef = useRef(0);
+  const initialScaleRef = useRef(0.42);
+  const spatialScaleRef = useRef(0.42);
 
   const triggerToast = (msg) => {
     console.log(`[AR Notification]: ${msg}`);
@@ -67,78 +78,27 @@ export default function ARExperience() {
     }
   }, [selectedCategory]);
 
-  // Local Animated Interior Video Canvas
-  const initLocalVideoCanvas = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1024;
-    canvas.height = 576;
-    videoCanvasRef.current = canvas;
+  // Setup MP4 Video Texture Source from /video.mp4 with loop=true
+  const initMP4VideoTexture = () => {
+    console.log("🎬 [Video Source] Loading local MP4 video file: /video.mp4 with loop = true");
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.loop = true; // LOOP = TRUE as requested!
+    video.muted = true;
+    video.playsInline = true;
+    video.src = "/video.mp4"; // Local MP4 in public/video.mp4
+    video.load();
+    video.play().catch((err) => {
+      console.warn("Video autoplay pending user gesture:", err);
+    });
+    videoElementRef.current = video;
 
-    const ctx = canvas.getContext("2d");
-    const texture = new THREE.CanvasTexture(canvas);
-    videoTextureRef.current = texture;
+    const videoTexture = new THREE.VideoTexture(video);
+    videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+    videoTextureRef.current = videoTexture;
 
-    let frame = 0;
-    const animateVideoCanvas = () => {
-      frame++;
-      const width = 1024;
-      const height = 576;
-
-      const grad = ctx.createLinearGradient(0, 0, width, height);
-      grad.addColorStop(0, "#0B0E14");
-      grad.addColorStop(0.5, "#141822");
-      grad.addColorStop(1, "#07090D");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
-
-      const sweepX = (Math.sin(frame * 0.02) * 0.5 + 0.5) * width;
-      const lightGrad = ctx.createRadialGradient(sweepX, 288, 20, sweepX, 288, 400);
-      lightGrad.addColorStop(0, "rgba(212, 175, 55, 0.35)");
-      lightGrad.addColorStop(1, "rgba(212, 175, 55, 0)");
-      ctx.fillStyle = lightGrad;
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.strokeStyle = "#D4AF37";
-      ctx.lineWidth = 8;
-      ctx.strokeRect(16, 16, width - 32, height - 32);
-
-      ctx.strokeStyle = "rgba(212, 175, 55, 0.25)";
-      ctx.lineWidth = 2;
-      const vpX = width / 2;
-      const vpY = height / 2 + Math.sin(frame * 0.015) * 20;
-
-      ctx.beginPath();
-      ctx.moveTo(16, 16); ctx.lineTo(vpX - 180, vpY - 100);
-      ctx.moveTo(width - 16, 16); ctx.lineTo(vpX + 180, vpY - 100);
-      ctx.moveTo(16, height - 16); ctx.lineTo(vpX - 180, vpY + 100);
-      ctx.moveTo(width - 16, height - 16); ctx.lineTo(vpX + 180, vpY + 100);
-      ctx.strokeRect(vpX - 180, vpY - 100, 360, 200);
-      ctx.stroke();
-
-      ctx.fillStyle = "#D4AF37";
-      ctx.font = "bold 42px \"Playfair Display\", serif";
-      ctx.fillText("MM INTERIORS VIZAG", 50, 80);
-
-      ctx.fillStyle = "#F3E5AB";
-      ctx.font = "bold 22px \"Plus Jakarta Sans\", sans-serif";
-      ctx.fillText("✨ 3D Architectural Interior Video Stream", 50, 120);
-
-      ctx.fillStyle = "rgba(11, 14, 20, 0.85)";
-      ctx.fillRect(50, height - 90, 420, 48);
-      ctx.strokeStyle = "rgba(212, 175, 55, 0.5)";
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(50, height - 90, 420, 48);
-
-      ctx.fillStyle = "#D4AF37";
-      ctx.font = "bold 18px \"Plus Jakarta Sans\", sans-serif";
-      ctx.fillText("● LIVE AR INTERIOR SHOWCASE", 70, height - 60);
-
-      texture.needsUpdate = true;
-      requestAnimationFrame(animateVideoCanvas);
-    };
-
-    animateVideoCanvas();
-    return texture;
+    return videoTexture;
   };
 
   const renderPortfolioWebCanvas = () => {
@@ -201,7 +161,7 @@ export default function ARExperience() {
     if (ctx.roundRect) ctx.roundRect(40, 220, width - 80, 420, 24);
     else ctx.rect(40, 220, width - 80, 420);
     ctx.fill();
-    ctx.strokeStyle = "rgba(212, 175, 55, 0.4)";
+    ctx.strokeStyle = "rgba(212, 175, 55, 0.5)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -278,7 +238,7 @@ export default function ARExperience() {
 
     const initAR = async () => {
       console.log("==================================================");
-      console.log("🚀 [WebAR Visit] INITIALIZING COMPACT SPATIAL WEBAR ENGINE");
+      console.log("🚀 [WebAR Visit] INITIALIZING MP4 VIDEO WEBAR ENGINE");
       console.log("==================================================");
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -298,7 +258,7 @@ export default function ARExperience() {
       }
 
       try {
-        const videoTexture = initLocalVideoCanvas();
+        const videoTexture = initMP4VideoTexture();
 
         mindarThree = new MindARThree({
           container: containerRef.current,
@@ -315,14 +275,15 @@ export default function ARExperience() {
         sceneRef.current = scene;
         cameraRef.current = camera;
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xD4AF37, 2.0);
+        const dirLight = new THREE.DirectionalLight(0xD4AF37, 2.2);
         dirLight.position.set(5, 8, 5);
         scene.add(dirLight);
+        dirLightRef.current = dirLight;
 
-        const pointLight = new THREE.PointLight(0xffffff, 1.2, 10);
+        const pointLight = new THREE.PointLight(0xffe680, 1.5, 12);
         pointLight.position.set(-2, 3, 2);
         scene.add(pointLight);
 
@@ -334,8 +295,14 @@ export default function ARExperience() {
           console.log("🎯🎯🎯 [MindAR EVENT] TARGET FOUND!");
           setTargetFound(true);
           if (mainSpatialGroupRef.current) mainSpatialGroupRef.current.visible = true;
-          triggerToast("🎯 MM Business Card Scanned!");
-          triggerMMLogoAnimation();
+
+          // Play MP4 video automatically on target recognition
+          if (videoElementRef.current) {
+            videoElementRef.current.play().catch(() => {});
+          }
+
+          triggerToast("✨ MM Business Card Scanned!");
+          animatePremiumSlideEntrance();
         };
 
         anchor.onTargetLost = () => {
@@ -345,16 +312,14 @@ export default function ARExperience() {
         };
 
         // -------------------------------------------------------------
-        // COMPACT SPATIAL LAYOUT (Scaled ~45% to fit phone screen!)
+        // SPATIAL 3D COMPOSITION
         // -------------------------------------------------------------
         const mainSpatialGroup = new THREE.Group();
         mainSpatialGroupRef.current = mainSpatialGroup;
         mainSpatialGroup.visible = false;
+        mainSpatialGroup.scale.set(spatialScaleRef.current, spatialScaleRef.current, spatialScaleRef.current);
 
-        // SCALE DOWN WHOLE GROUP TO FIT COMPACTLY ON SCREEN
-        mainSpatialGroup.scale.set(0.42, 0.42, 0.42);
-
-        // 1. CENTER: 3D Business Card Base Box (3.8 x 2.25)
+        // 1. CENTER: 3D Business Card Base Box
         const createCardBaseMesh = () => {
           const cardGeo = new THREE.BoxGeometry(3.8, 2.25, 0.08);
 
@@ -367,7 +332,7 @@ export default function ARExperience() {
           ctx.fillRect(0, 0, 1024, 576);
 
           ctx.strokeStyle = "#D4AF37";
-          ctx.lineWidth = 12;
+          ctx.lineWidth = 14;
           ctx.strokeRect(20, 20, 984, 536);
 
           ctx.strokeStyle = "#AA771C";
@@ -391,17 +356,34 @@ export default function ARExperience() {
 
           const cardTexture = new THREE.CanvasTexture(canvas);
 
-          const goldSideMat = new THREE.MeshStandardMaterial({ color: 0xD4AF37, metalness: 0.9, roughness: 0.2 });
-          const frontMat = new THREE.MeshStandardMaterial({ map: cardTexture, roughness: 0.25, metalness: 0.3 });
-          const backMat = new THREE.MeshStandardMaterial({ color: 0x0B0E14, metalness: 0.6, roughness: 0.4 });
+          const goldSideMat = new THREE.MeshStandardMaterial({
+            color: 0xD4AF37,
+            metalness: 0.95,
+            roughness: 0.15,
+            emissive: 0x332200,
+            emissiveIntensity: 0.2
+          });
 
-          return new THREE.Mesh(cardGeo, [goldSideMat, goldSideMat, goldSideMat, goldSideMat, frontMat, backMat]);
+          const frontMat = new THREE.MeshStandardMaterial({
+            map: cardTexture,
+            roughness: 0.2,
+            metalness: 0.4
+          });
+
+          const backMat = new THREE.MeshStandardMaterial({
+            color: 0x0B0E14,
+            metalness: 0.8,
+            roughness: 0.3
+          });
+
+          const mesh = new THREE.Mesh(cardGeo, [goldSideMat, goldSideMat, goldSideMat, goldSideMat, frontMat, backMat]);
+          cardMeshRef.current = mesh;
+          return mesh;
         };
 
-        const cardMesh = createCardBaseMesh();
-        mainSpatialGroup.add(cardMesh);
+        mainSpatialGroup.add(createCardBaseMesh());
 
-        // 2. LEFT SIDE: 3D Extruded MM Monogram Logo (Rotates Continuously on Y-Axis)
+        // 2. LEFT SIDE: 3D Extruded MM Monogram Logo
         const createExtrudedMMLogo = () => {
           const mmGroup = new THREE.Group();
           const shape = new THREE.Shape();
@@ -443,14 +425,15 @@ export default function ARExperience() {
           const goldMaterial = new THREE.MeshStandardMaterial({
             color: 0xD4AF37,
             metalness: 0.95,
-            roughness: 0.15
+            roughness: 0.12,
+            emissive: 0x443300,
+            emissiveIntensity: 0.25
           });
 
           const mmMesh = new THREE.Mesh(geometry, goldMaterial);
           mmMesh.name = "MMLogoMesh";
           mmGroup.add(mmMesh);
 
-          // Positioned on Left Side: (-2.6, 0, 0.3)
           mmGroup.position.set(-2.6, 0, 0.3);
           mmGroup.scale.set(0.85, 0.85, 0.85);
           mm3DGroupRef.current = mmGroup;
@@ -459,7 +442,7 @@ export default function ARExperience() {
 
         mainSpatialGroup.add(createExtrudedMMLogo());
 
-        // 3. MIDDLE TOP: 3D Video Screen Plane (3.2 x 1.8)
+        // 3. MIDDLE TOP: 3D Video Screen Plane playing /video.mp4 with loop = true!
         const createVideoScreenMesh = () => {
           const videoGeo = new THREE.PlaneGeometry(3.2, 1.8);
           const videoMat = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
@@ -469,13 +452,20 @@ export default function ARExperience() {
           videoMeshRef.current = videoMesh;
 
           const frameGeo = new THREE.BoxGeometry(3.32, 1.92, 0.05);
-          const frameMat = new THREE.MeshStandardMaterial({ color: 0x141822, metalness: 0.8, roughness: 0.2 });
+          const frameMat = new THREE.MeshStandardMaterial({
+            color: 0x141822,
+            metalness: 0.9,
+            roughness: 0.2,
+            emissive: 0x221a00,
+            emissiveIntensity: 0.3
+          });
           const frameMesh = new THREE.Mesh(frameGeo, frameMat);
           frameMesh.position.set(0, 2.2, 0.05);
 
           const group = new THREE.Group();
           group.add(frameMesh);
           group.add(videoMesh);
+          videoGroupRef.current = group;
           return group;
         };
 
@@ -502,7 +492,13 @@ export default function ARExperience() {
           portfolioWebMesh.name = "portfolioWebMesh";
           portfolioWebMeshRef.current = portfolioWebMesh;
 
-          const frameMat = new THREE.MeshStandardMaterial({ color: 0x141822, metalness: 0.8, roughness: 0.2 });
+          const frameMat = new THREE.MeshStandardMaterial({
+            color: 0x141822,
+            metalness: 0.85,
+            roughness: 0.2,
+            emissive: 0x221a00,
+            emissiveIntensity: 0.3
+          });
           const webFrameGeo = new THREE.BoxGeometry(2.6, 3.4, 0.04);
           const webFrameMesh = new THREE.Mesh(webFrameGeo, frameMat);
           webFrameMesh.position.set(2.9, 0.5, 0.05);
@@ -511,29 +507,84 @@ export default function ARExperience() {
           const group = new THREE.Group();
           group.add(webFrameMesh);
           group.add(portfolioWebMesh);
+          portfolioGroupRef.current = group;
           return group;
         };
 
         mainSpatialGroup.add(createPortfolioWebPanelMesh());
 
-        // 5. AMBIENT PARTICLES
-        const particleCount = 120;
+        // 5. BOTTOM 3D ACTION BUTTONS (CALL US, WHATSAPP, BOOK CONSULTATION, WEBSITE)
+        const createActionButtonsGroup = () => {
+          const actionGroup = new THREE.Group();
+          actionMeshesRef.current = [];
+
+          const actionItems = [
+            { label: "📞 Call Us", url: "tel:+919876543210", x: -2.1, color: "#D4AF37" },
+            { label: "💬 WhatsApp", url: "https://wa.me/919876543210?text=Hello%20MM%20Interiors%20Vizag,%20I%20would%20like%20to%20inquire%20about%20your%20interior%20services.", x: -0.7, color: "#25D366" },
+            { label: "📅 Consultation", action: "consultation", x: 0.7, color: "#D4AF37" },
+            { label: "🌐 Website", url: "https://www.mminteriorsvizag.com", x: 2.1, color: "#D4AF37" }
+          ];
+
+          actionItems.forEach((item) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 300;
+            canvas.height = 90;
+            const ctx = canvas.getContext("2d");
+
+            ctx.fillStyle = "#141822";
+            ctx.fillRect(0, 0, 300, 90);
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = 5;
+            ctx.strokeRect(6, 6, 288, 78);
+
+            ctx.fillStyle = item.color;
+            ctx.font = "bold 26px \"Plus Jakarta Sans\", sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(item.label, 150, 54);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const geo = new THREE.PlaneGeometry(1.25, 0.38);
+            const mat = new THREE.MeshBasicMaterial({ map: texture });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(item.x, -1.8, 0.2);
+            mesh.name = `ActionMesh_${item.label}`;
+            mesh.userData = item;
+
+            const frameGeo = new THREE.BoxGeometry(1.29, 0.42, 0.02);
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x0B0E14, metalness: 0.8, roughness: 0.2 });
+            const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+            frameMesh.position.set(item.x, -1.8, 0.18);
+
+            const btnGroup = new THREE.Group();
+            btnGroup.add(frameMesh);
+            btnGroup.add(mesh);
+
+            actionGroup.add(btnGroup);
+            actionMeshesRef.current.push(mesh);
+          });
+
+          return actionGroup;
+        };
+
+        mainSpatialGroup.add(createActionButtonsGroup());
+
+        // 6. AMBIENT GOLD PARTICLES
+        const particleCount = 140;
         const pGeo = new THREE.BufferGeometry();
         const pPos = new Float32Array(particleCount * 3);
         for (let i = 0; i < particleCount * 3; i += 3) {
-          pPos[i] = (Math.random() - 0.5) * 12;
-          pPos[i + 1] = (Math.random() - 0.5) * 12;
-          pPos[i + 2] = (Math.random() - 0.5) * 12;
+          pPos[i] = (Math.random() - 0.5) * 14;
+          pPos[i + 1] = (Math.random() - 0.5) * 14;
+          pPos[i + 2] = (Math.random() - 0.5) * 14;
         }
         pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
-        const pMat = new THREE.PointsMaterial({ color: 0xD4AF37, size: 0.05, transparent: true, opacity: 0.6 });
+        const pMat = new THREE.PointsMaterial({ color: 0xD4AF37, size: 0.06, transparent: true, opacity: 0.7 });
         const particleSystem = new THREE.Points(pGeo, pMat);
         mainSpatialGroup.add(particleSystem);
 
-        // Parent ALL 3D Content to MindAR Target Anchor
         anchor.group.add(mainSpatialGroup);
 
-        // RAYCASTER INTERACTION HANDLER
+        // RAYCASTER HANDLER
         const handlePointerDown = (event) => {
           if (!mouseRef.current || !raycasterRef.current || !cameraRef.current) return;
           mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -544,7 +595,8 @@ export default function ARExperience() {
           const intersects = raycasterRef.current.intersectObjects([
             portfolioWebMeshRef.current,
             videoMeshRef.current,
-            mm3DGroupRef.current
+            mm3DGroupRef.current,
+            ...actionMeshesRef.current
           ].filter(Boolean), true);
 
           if (intersects.length > 0) {
@@ -565,19 +617,72 @@ export default function ARExperience() {
                 setSelectedCategory(cat);
                 triggerToast("Portfolio View: " + cat);
               } else if (tapY >= 0.70 && tapY <= 0.82) {
-                triggerToast("📍 Consultation Request Sent for " + selectedCategoryRef.current + "!");
+                setShowConsultModal(true);
               }
             } else if (hitMesh.name === "MMLogoMesh" || (mm3DGroupRef.current && (hitMesh === mm3DGroupRef.current || hitMesh.parent === mm3DGroupRef.current))) {
-              triggerMMLogoAnimation();
+              triggerMMLogoElevation();
+            } else if (hitMesh.userData && hitMesh.userData.action === "consultation") {
+              console.log("[Raycaster] Consultation Button Clicked");
+              setShowConsultModal(true);
+            } else if (hitMesh.userData && hitMesh.userData.url) {
+              console.log("[Raycaster] Opening External URL:", hitMesh.userData.url);
+              window.open(hitMesh.userData.url, "_blank");
             }
           }
         };
 
         window.addEventListener("pointerdown", handlePointerDown);
 
-        console.log("🎥 [MindAR] Starting Camera Stream...");
+        // PINCH-TO-ZOOM & MOUSE WHEEL ZOOM GESTURES
+        const handleTouchStart = (e) => {
+          if (e.touches.length === 2) {
+            const dist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+            initialPinchDistRef.current = dist;
+            initialScaleRef.current = spatialScaleRef.current;
+          }
+        };
+
+        const handleTouchMove = (e) => {
+          if (e.touches.length === 2 && initialPinchDistRef.current > 0) {
+            const currentDist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+            const factor = currentDist / initialPinchDistRef.current;
+            const newScale = Math.min(Math.max(initialScaleRef.current * factor, 0.15), 1.2);
+            spatialScaleRef.current = newScale;
+            if (mainSpatialGroupRef.current) {
+              mainSpatialGroupRef.current.scale.set(newScale, newScale, newScale);
+            }
+          }
+        };
+
+        const handleTouchEnd = (e) => {
+          if (e.touches.length < 2) {
+            initialPinchDistRef.current = 0;
+          }
+        };
+
+        const handleWheel = (e) => {
+          const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+          const newScale = Math.min(Math.max(spatialScaleRef.current * zoomFactor, 0.15), 1.2);
+          spatialScaleRef.current = newScale;
+          if (mainSpatialGroupRef.current) {
+            mainSpatialGroupRef.current.scale.set(newScale, newScale, newScale);
+          }
+        };
+
+        window.addEventListener("touchstart", handleTouchStart, { passive: true });
+        window.addEventListener("touchmove", handleTouchMove, { passive: true });
+        window.addEventListener("touchend", handleTouchEnd, { passive: true });
+        window.addEventListener("wheel", handleWheel, { passive: true });
+
+        console.log("🎥 [MindAR] Starting Camera Feed...");
         await mindarThree.start();
-        console.log("✅ [MindAR] Camera Feed Active! Scanning MM Business Card...");
+        console.log("✅ [MindAR] Camera Feed Active!");
         setArStarted(true);
 
         renderer.setAnimationLoop(() => {
@@ -586,6 +691,9 @@ export default function ARExperience() {
           }
           if (particleSystem) {
             particleSystem.rotation.y += 0.0006;
+          }
+          if (dirLightRef.current) {
+            dirLightRef.current.intensity = 2.0 + Math.sin(Date.now() * 0.003) * 0.4;
           }
           renderer.render(scene, camera);
         });
@@ -606,7 +714,49 @@ export default function ARExperience() {
     };
   }, []);
 
-  const triggerMMLogoAnimation = () => {
+  // ULTRA-PREMIUM 3D SLIDE ENTRANCE ANIMATION SEQUENCE
+  const animatePremiumSlideEntrance = () => {
+    console.log("✨ [GSAP Animation] Triggering Ultra-Premium 3D Spatial Slide Entrance Sequence");
+
+    if (mm3DGroupRef.current) {
+      gsap.fromTo(
+        mm3DGroupRef.current.position,
+        { x: -6.0, y: 0, z: 0.3 },
+        { x: -2.6, y: 0, z: 0.3, duration: 1.2, ease: "power3.out" }
+      );
+      gsap.fromTo(
+        mm3DGroupRef.current.rotation,
+        { y: -Math.PI * 2 },
+        { y: 0, duration: 1.2, ease: "power3.out" }
+      );
+    }
+
+    if (videoGroupRef.current) {
+      gsap.fromTo(
+        videoGroupRef.current.position,
+        { x: 0, y: 6.0, z: 0.1 },
+        { x: 0, y: 0, z: 0, duration: 1.1, ease: "back.out(1.4)", delay: 0.1 }
+      );
+    }
+
+    if (portfolioGroupRef.current) {
+      gsap.fromTo(
+        portfolioGroupRef.current.position,
+        { x: 6.0, y: 0.5, z: 0.1 },
+        { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.out", delay: 0.2 }
+      );
+    }
+
+    if (cardMeshRef.current) {
+      gsap.fromTo(
+        cardMeshRef.current.position,
+        { z: -1.5 },
+        { z: 0, duration: 1.0, ease: "power2.out" }
+      );
+    }
+  };
+
+  const triggerMMLogoElevation = () => {
     if (!mm3DGroupRef.current) return;
     triggerToast("✨ 3D MM Logo Monogram Elevation");
     const group = mm3DGroupRef.current;
@@ -618,10 +768,115 @@ export default function ARExperience() {
       .to(group.scale, { x: 0.85, y: 0.85, z: 0.85, duration: 0.8, ease: "power3.out" }, "<");
   };
 
+  const handleZoom = (direction) => {
+    const factor = direction === "in" ? 1.15 : 0.85;
+    const newScale = Math.min(Math.max(spatialScaleRef.current * factor, 0.15), 1.2);
+    spatialScaleRef.current = newScale;
+    if (mainSpatialGroupRef.current) {
+      mainSpatialGroupRef.current.scale.set(newScale, newScale, newScale);
+    }
+    triggerToast(`🔍 Spatial Zoom: ${Math.round(newScale * 100)}%`);
+  };
+
+  const resetZoom = () => {
+    spatialScaleRef.current = 0.42;
+    if (mainSpatialGroupRef.current) {
+      mainSpatialGroupRef.current.scale.set(0.42, 0.42, 0.42);
+    }
+    triggerToast("🔄 Zoom Level Reset");
+  };
+
+  const handleConsultSubmit = (e) => {
+    e.preventDefault();
+    console.log("📋 [Form Submitted] Consultation request received");
+    setShowConsultModal(false);
+    triggerToast("Consultation Request Received! MM Interiors Vizag will contact you.");
+  };
+
   return (
     <div className="fixed inset-0 w-full h-full bg-black overflow-hidden select-none">
       {/* MindAR Camera Feed Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full z-0"></div>
+
+      {/* FLOATING ZOOM CONTROLS FOR PHONE TOUCH & DESKTOP */}
+      {arStarted && targetFound && (
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-2">
+          <button
+            onClick={() => handleZoom("in")}
+            className="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-gold-500 font-bold text-lg shadow-2xl active:scale-90 transition-transform"
+            title="Zoom In 3D Scene"
+          >
+            <i className="fa-solid fa-magnifying-glass-plus"></i>
+          </button>
+          <button
+            onClick={() => handleZoom("out")}
+            className="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-gold-500 font-bold text-lg shadow-2xl active:scale-90 transition-transform"
+            title="Zoom Out 3D Scene"
+          >
+            <i className="fa-solid fa-magnifying-glass-minus"></i>
+          </button>
+          <button
+            onClick={resetZoom}
+            className="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-gold-500 font-bold text-xs shadow-2xl active:scale-90 transition-transform"
+            title="Reset Zoom"
+          >
+            <i className="fa-solid fa-rotate-left"></i>
+          </button>
+        </div>
+      )}
+
+      {/* CONSULTATION FORM MODAL */}
+      {showConsultModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-5">
+          <div className="glass-panel p-6 rounded-3xl max-w-md w-full border-gold-500/60 shadow-2xl flex flex-col gap-4 text-white">
+            <div className="flex justify-between items-center border-b border-gold-500/20 pb-3">
+              <h3 className="font-serif font-bold text-xl text-gold-500">Book Interior Consultation</h3>
+              <button onClick={() => setShowConsultModal(false)} className="text-gray-400 hover:text-white">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+            <form onSubmit={handleConsultSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs text-gold-300 font-semibold mb-1 block">Your Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter full name"
+                  className="w-full bg-charcoal-900 border border-gold-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-gold-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gold-300 font-semibold mb-1 block">Phone Number</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="+91 98765 43210"
+                  className="w-full bg-charcoal-900 border border-gold-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-gold-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gold-300 font-semibold mb-1 block">Design Interest</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full bg-charcoal-900 border border-gold-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-gold-500"
+                >
+                  <option value="Living Room">Living Room Design</option>
+                  <option value="Kitchen">Modular Kitchen</option>
+                  <option value="Bedroom">Master Bedroom Suite</option>
+                  <option value="Commercial">Commercial / Executive Lounge</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="gold-btn py-3 rounded-xl font-bold text-xs uppercase tracking-wider mt-3 shadow-lg"
+              >
+                Submit Consultation Request
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ERROR FALLBACK OVERLAY */}
       {errorMessage && (
