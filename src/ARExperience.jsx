@@ -7,22 +7,38 @@ const portfolioData = {
   "Living Room": {
     title: "Royal Living Suite",
     location: "Siripuram, Vizag",
-    desc: "Italian Statuario marble flooring, custom brass accent inlays, motorized cove lighting, and acoustic oak wood paneling."
+    bgGrad: ["#0F172A", "#1E293B"],
+    accent: "#D4AF37",
+    icon: "🛋️",
+    desc: "Italian Statuario marble flooring, custom brass accent inlays, motorized cove lighting, and acoustic oak wood paneling.",
+    specs: ["Italian Statuario Marble", "Custom Brass Inlays", "Motorized Cove Lighting", "Acoustic Oak Paneling"]
   },
   "Kitchen": {
     title: "Minimalist Kitchen",
     location: "Beach Road, Vizag",
-    desc: "Calacatta Gold Quartz countertops, handleless touch-to-open acrylic cabinets, and concealed smart appliances."
+    bgGrad: ["#1E1B18", "#2A241F"],
+    accent: "#F3E5AB",
+    icon: "🍳",
+    desc: "Calacatta Gold Quartz countertops, handleless touch-to-open acrylic cabinets, and concealed smart appliances.",
+    specs: ["Calacatta Gold Quartz", "Touch-to-Open Cabinets", "Concealed Smart Tech", "Waterfall Island Design"]
   },
   "Bedroom": {
     title: "Master Sanctuary",
     location: "MVP Colony, Vizag",
-    desc: "Smoked oak veneer wall paneling, hand-tufted acoustic velvet headboard, and automated glass wardrobe lighting."
+    bgGrad: ["#1A1412", "#2D221E"],
+    accent: "#E5C158",
+    icon: "🛏️",
+    desc: "Smoked oak veneer wall paneling, hand-tufted acoustic velvet headboard, and automated glass wardrobe lighting.",
+    specs: ["Smoked Oak Veneer", "Tufted Velvet Headboard", "Automated Glass Wardrobe", "Ambient Accent Lighting"]
   },
   "Commercial": {
     title: "Executive Lounge",
     location: "Tech Park, Vizag",
-    desc: "Bespoke 16-seater boardroom acoustics, Italian full-grain leather finishes, and dynamic brand logo LED lighting."
+    bgGrad: ["#091E2A", "#123042"],
+    accent: "#38BDF8",
+    icon: "🏢",
+    desc: "Bespoke 16-seater boardroom acoustics, Italian full-grain leather finishes, and dynamic brand logo LED lighting.",
+    specs: ["16-Seater Boardroom", "Full-Grain Italian Leather", "Dynamic LED Brand Logo", "Acoustic Wall Panels"]
   }
 };
 
@@ -30,11 +46,17 @@ export default function ARExperience() {
   const containerRef = useRef(null);
   const [arStarted, setArStarted] = useState(false);
   const [targetFound, setTargetFound] = useState(false);
+  const targetFoundRef = useRef(false);
+  const targetLostTimerRef = useRef(null);
   const [selectedCategory, setSelectedCategory] = useState("Living Room");
   const [errorMessage, setErrorMessage] = useState(null);
   const [toastMsg, setToastMsg] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [showConsultModal, setShowConsultModal] = useState(false);
+
+  // State: Is Portfolio Panel Slid Out to the Right
+  const [isPortfolioSlidOut, setIsPortfolioSlidOut] = useState(false);
+  const isPortfolioSlidOutRef = useRef(false);
 
   // References
   const mindarRef = useRef(null);
@@ -51,6 +73,11 @@ export default function ARExperience() {
   const portfolioCtxRef = useRef(null);
   const videoElementRef = useRef(null);
   const videoTextureRef = useRef(null);
+  const fallbackVideoCanvasRef = useRef(null);
+  const fallbackVideoTextureRef = useRef(null);
+  const slideBtnCanvasRef = useRef(null);
+  const slideBtnTextureRef = useRef(null);
+  const slideBtnMeshRef = useRef(null);
   const selectedCategoryRef = useRef("Living Room");
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
@@ -58,17 +85,104 @@ export default function ARExperience() {
   const videoMeshRef = useRef(null);
   const actionMeshesRef = useRef([]);
   const dirLightRef = useRef(null);
+  const isAnimatingRef = useRef(false);
 
-  // Pinch Zoom Gesture References
+  // Pinch Zoom Gesture References - Mobile Scale (0.38)
   const initialPinchDistRef = useRef(0);
-  const initialScaleRef = useRef(0.42);
-  const spatialScaleRef = useRef(0.42);
+  const initialScaleRef = useRef(0.38);
+  const spatialScaleRef = useRef(0.38);
 
   const triggerToast = (msg) => {
     console.log(`[AR Notification]: ${msg}`);
     setToastMsg(msg);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2800);
+  };
+
+  // Slide Out Portfolio Panel to the Right (Positioned at x = 2.7, scale = 1.05 with auto scene re-centering)
+  const togglePortfolioSlide = (e) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+    }
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+    setTimeout(() => { isAnimatingRef.current = false; }, 400);
+
+    const nextState = !isPortfolioSlidOutRef.current;
+    isPortfolioSlidOutRef.current = nextState;
+    setIsPortfolioSlidOut(nextState);
+
+    // Update Slide Button Texture
+    if (slideBtnCanvasRef.current && slideBtnTextureRef.current) {
+      const ctx = slideBtnCanvasRef.current.getContext("2d");
+      ctx.fillStyle = nextState ? "#D4AF37" : "#141822";
+      ctx.fillRect(0, 0, 360, 100);
+
+      ctx.strokeStyle = "#D4AF37";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(6, 6, 348, 88);
+
+      ctx.fillStyle = nextState ? "#07090D" : "#F3E5AB";
+      ctx.font = "bold 24px \"Plus Jakarta Sans\", sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(nextState ? "◀ HIDE PORTFOLIO" : "▶ SLIDE PORTFOLIO", 180, 60);
+
+      slideBtnTextureRef.current.needsUpdate = true;
+    }
+
+    if (nextState) {
+      // SLIDE PORTFOLIO OUT TO THE RIGHT AT X = 2.7 (Visible adjacent to Card)
+      console.log("▶ [Slide Action] Sliding Portfolio panel out next to business card");
+
+      if (portfolioGroupRef.current) {
+        portfolioGroupRef.current.visible = true;
+        portfolioGroupRef.current.position.set(2.25, 0.0, -0.1);
+        portfolioGroupRef.current.scale.set(0, 0, 0);
+
+        gsap.to(portfolioGroupRef.current.position, {
+          x: 2.7, y: 0.0, z: 0.15, duration: 0.65, ease: "power3.out"
+        });
+        gsap.to(portfolioGroupRef.current.scale, {
+          x: 1.05, y: 1.05, z: 1.05, duration: 0.65, ease: "back.out(1.2)"
+        });
+      }
+
+      // Smoothly shift main spatial scene left to keep both Card & Portfolio centered on screen
+      if (mainSpatialGroupRef.current) {
+        gsap.to(mainSpatialGroupRef.current.position, {
+          x: -0.3, duration: 0.65, ease: "power3.out"
+        });
+      }
+
+      triggerToast("▶ Portfolio Showcase Slid Out (Expanded View)!");
+
+    } else {
+      // SLIDE PORTFOLIO BACK IN BEHIND CARD AT X = 2.25
+      console.log("◀ [Slide Action] Sliding Portfolio panel back in");
+
+      if (portfolioGroupRef.current) {
+        gsap.to(portfolioGroupRef.current.position, {
+          x: 2.25, y: 0.0, z: -0.1, duration: 0.5, ease: "power2.in"
+        });
+        gsap.to(portfolioGroupRef.current.scale, {
+          x: 0, y: 0, z: 0, duration: 0.5, ease: "power2.in",
+          onComplete: () => {
+            if (!isPortfolioSlidOutRef.current && portfolioGroupRef.current) {
+              portfolioGroupRef.current.visible = false;
+            }
+          }
+        });
+      }
+
+      // Return main spatial scene to default right offset position x = 1.15
+      if (mainSpatialGroupRef.current) {
+        gsap.to(mainSpatialGroupRef.current.position, {
+          x: 1.15, duration: 0.5, ease: "power2.inOut"
+        });
+      }
+
+      triggerToast("◀ Portfolio Slid Back In");
+    }
   };
 
   useEffect(() => {
@@ -78,18 +192,85 @@ export default function ARExperience() {
     }
   }, [selectedCategory]);
 
-  // Robust Local Interior Video Texture Setup (Never Blank!)
-  const initRobustVideoTexture = () => {
-    console.log("🎬 [Video Source] Initializing robust 3D Video Stream...");
+  // Create Fallback Canvas Texture for Video Screen
+  const createFallbackVideoTexture = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    fallbackVideoCanvasRef.current = canvas;
 
-    // Create DOM-attached hidden video element
+    const renderCanvas = (time = 0) => {
+      const grad = ctx.createLinearGradient(0, 0, 1280, 720);
+      grad.addColorStop(0, "#0B0E14");
+      grad.addColorStop(0.5, "#141822");
+      grad.addColorStop(1, "#07090D");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1280, 720);
+
+      ctx.strokeStyle = "#D4AF37";
+      ctx.lineWidth = 12;
+      ctx.strokeRect(20, 20, 1240, 680);
+
+      ctx.strokeStyle = "#AA771C";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(36, 36, 1208, 648);
+
+      const glow = Math.sin(time * 0.003) * 15 + 30;
+      ctx.fillStyle = "rgba(212, 175, 55, 0.15)";
+      ctx.beginPath();
+      ctx.arc(640, 310, 110 + glow / 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#141822";
+      ctx.beginPath();
+      ctx.arc(640, 310, 90, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#D4AF37";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+
+      ctx.fillStyle = "#D4AF37";
+      ctx.beginPath();
+      ctx.moveTo(625, 260);
+      ctx.lineTo(675, 310);
+      ctx.lineTo(625, 360);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#D4AF37";
+      ctx.font = "bold 52px \"Playfair Display\", serif";
+      ctx.textAlign = "center";
+      ctx.fillText("MM INTERIORS SHOWCASE", 640, 480);
+
+      ctx.fillStyle = "#F3E5AB";
+      ctx.font = "bold 28px \"Plus Jakarta Sans\", sans-serif";
+      ctx.fillText("✨ Turnkey Luxury Architectural Design • Vizag", 640, 535);
+
+      ctx.fillStyle = "#A0A5B5";
+      ctx.font = "22px \"Plus Jakarta Sans\", sans-serif";
+      ctx.fillText("Tap screen to activate video audio & stream", 640, 590);
+    };
+
+    renderCanvas(0);
+    const texture = new THREE.CanvasTexture(canvas);
+    fallbackVideoTextureRef.current = texture;
+    return texture;
+  };
+
+  // Bulletproof Local Interior Video Setup with Autoplay Unlock
+  const initBulletproofVideoTexture = () => {
+    console.log("🎬 [Video Source] Initializing bulletproof MP4 Video Stream...");
+
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
     video.loop = true;
     video.muted = true;
     video.playsInline = true;
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "");
+    video.autoplay = true;
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
+    video.setAttribute("muted", "true");
     video.style.display = "none";
     video.src = "/video.mp4";
 
@@ -104,23 +285,28 @@ export default function ARExperience() {
     videoTexture.format = THREE.RGBAFormat;
     videoTextureRef.current = videoTexture;
 
-    // Try playing local video
-    video.load();
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          console.log("✅ [Video Stream] /video.mp4 playing successfully!");
-        })
-        .catch((err) => {
-          console.warn("⚠️ [Video Stream] Video play pending interaction, fallback ready:", err);
+    const unlockVideo = () => {
+      if (videoElementRef.current) {
+        videoElementRef.current.muted = true;
+        videoElementRef.current.play().then(() => {
+          console.log("✅ [Video Autoplay] Stream successfully playing!");
+        }).catch((err) => {
+          console.warn("Autoplay gesture unlock attempt:", err);
         });
-    }
+      }
+    };
+
+    window.addEventListener("touchstart", unlockVideo, { passive: true });
+    window.addEventListener("pointerdown", unlockVideo, { passive: true });
+    window.addEventListener("click", unlockVideo, { passive: true });
+
+    video.load();
+    unlockVideo();
 
     return videoTexture;
   };
 
-  // Render Portfolio Web Canvas (1080 x 960)
+  // Render High-Contrast Widescreen Portfolio Canvas (1920 x 1080) with Larger Bold Typography
   const renderPortfolioWebCanvas = () => {
     const canvas = portfolioCanvasRef.current;
     const ctx = portfolioCtxRef.current;
@@ -129,130 +315,156 @@ export default function ARExperience() {
     const width = canvas.width;
     const height = canvas.height;
     const category = selectedCategoryRef.current;
+    const currentData = portfolioData[category] || portfolioData["Living Room"];
 
-    // Background Panel
-    ctx.fillStyle = "#141822";
+    // 1. Deep Room-Specific Theme Background
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, currentData.bgGrad[0]);
+    bgGrad.addColorStop(1, currentData.bgGrad[1]);
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Header Banner
-    ctx.fillStyle = "#0B0E14";
-    ctx.fillRect(0, 0, width, 120);
+    // Outer Gold Glow Frame
+    ctx.strokeStyle = "#D4AF37";
+    ctx.lineWidth = 18;
+    ctx.strokeRect(12, 12, width - 24, height - 24);
 
+    // 2. Bright Royal Gold Header Banner
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "bold 36px \"Playfair Display\", serif";
-    ctx.fillText("MM Interiors Portfolio Web Showcase", 40, 60);
+    ctx.fillRect(20, 20, width - 40, 135);
 
-    ctx.fillStyle = "#A0A5B5";
-    ctx.font = "20px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("Interactive WebAR Architectural Portfolio • Vizag Studio", 40, 98);
+    ctx.fillStyle = "#07090D";
+    ctx.font = "bold 54px \"Playfair Display\", serif";
+    ctx.fillText("🏛️ MM INTERIORS ARCHITECTURAL PORTFOLIO", 60, 85);
 
-    // CATEGORY FILTER TABS
-    const categories = ["Living Room", "Kitchen", "Bedroom", "Commercial"];
-    const tabWidth = 220;
-    const tabHeight = 52;
-    const startX = 40;
-    const startY = 145;
+    ctx.fillStyle = "#1E293B";
+    ctx.font = "bold 26px \"Plus Jakarta Sans\", sans-serif";
+    ctx.fillText("✨ Turnkey Architectural Interior Design Studio • Vizag", 60, 124);
 
-    categories.forEach((cat, index) => {
-      const x = startX + index * (tabWidth + 18);
-      const isSelected = cat === category;
+    // 3. 4 Interactive Category Tabs across Top Banner
+    const categories = [
+      { name: "Living Room", icon: "🛋️" },
+      { name: "Kitchen", icon: "🍳" },
+      { name: "Bedroom", icon: "🛏️" },
+      { name: "Commercial", icon: "🏢" }
+    ];
+    const tabWidth = 430;
+    const tabHeight = 85;
+    const startX = 60;
+    const startY = 175;
 
-      ctx.fillStyle = isSelected ? "#D4AF37" : "rgba(255, 255, 255, 0.08)";
+    categories.forEach((catObj, index) => {
+      const x = startX + index * (tabWidth + 25);
+      const isSelected = catObj.name === category;
+
+      ctx.fillStyle = isSelected ? "#D4AF37" : "rgba(255, 255, 255, 0.09)";
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, startY, tabWidth, tabHeight, 14);
+      if (ctx.roundRect) ctx.roundRect(x, startY, tabWidth, tabHeight, 22);
       else ctx.rect(x, startY, tabWidth, tabHeight);
       ctx.fill();
 
-      if (isSelected) {
-        ctx.strokeStyle = "#F3E5AB";
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-      }
+      ctx.strokeStyle = isSelected ? "#FFFFFF" : "#D4AF37";
+      ctx.lineWidth = isSelected ? 6 : 2.5;
+      ctx.stroke();
 
-      ctx.fillStyle = isSelected ? "#07090D" : "#D4AF37";
-      ctx.font = "bold 18px \"Plus Jakarta Sans\", sans-serif";
+      ctx.fillStyle = isSelected ? "#07090D" : "#F3E5AB";
+      ctx.font = "bold 30px \"Plus Jakarta Sans\", sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(cat, x + tabWidth / 2, startY + 33);
+      ctx.fillText(`${catObj.icon} ${catObj.name}`, x + tabWidth / 2, startY + 54);
     });
 
     ctx.textAlign = "left";
 
-    const currentData = portfolioData[category] || portfolioData["Living Room"];
-
-    // FEATURED PROJECT DISPLAY CARD
-    ctx.fillStyle = "#0B0E14";
+    // 4. Main Featured Showcase Card Area
+    ctx.fillStyle = "#141822";
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(40, 225, width - 80, 420, 24);
-    else ctx.rect(40, 225, width - 80, 420);
+    if (ctx.roundRect) ctx.roundRect(60, 285, width - 120, 620, 30);
+    else ctx.rect(60, 285, width - 120, 620);
     ctx.fill();
-    ctx.strokeStyle = "rgba(212, 175, 55, 0.5)";
-    ctx.lineWidth = 2.5;
+
+    ctx.strokeStyle = "#D4AF37";
+    ctx.lineWidth = 5;
     ctx.stroke();
 
-    const grad = ctx.createLinearGradient(40, 225, width - 80, 645);
-    grad.addColorStop(0, "#141822");
-    grad.addColorStop(1, "#0B0E14");
-    ctx.fillStyle = grad;
-    ctx.fillRect(44, 229, width - 88, 412);
+    // Decorative Architectural Grid Accent Lines
+    ctx.strokeStyle = "rgba(212, 175, 55, 0.12)";
+    ctx.lineWidth = 2;
+    for (let gx = 1200; gx < width - 120; gx += 80) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 300);
+      ctx.lineTo(gx, 880);
+      ctx.stroke();
+    }
+    for (let gy = 320; gy < 880; gy += 80) {
+      ctx.beginPath();
+      ctx.moveTo(1200, gy);
+      ctx.lineTo(width - 120, gy);
+      ctx.stroke();
+    }
 
+    // Project Title & Location
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "bold 28px \"Playfair Display\", serif";
-    ctx.fillText("FEATURED DESIGN SHOWCASE", 70, 285);
+    ctx.font = "bold 34px \"Playfair Display\", serif";
+    ctx.fillText(`${currentData.icon} FEATURED DESIGN SHOWCASE • ${category.toUpperCase()}`, 110, 355);
 
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 40px \"Playfair Display\", serif";
-    ctx.fillText(currentData.title, 70, 345);
+    ctx.font = "bold 60px \"Playfair Display\", serif";
+    ctx.fillText(currentData.title.toUpperCase(), 110, 435);
 
-    ctx.fillStyle = "#D4AF37";
-    ctx.font = "600 22px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("📍 " + currentData.location, 70, 390);
+    ctx.fillStyle = "#F3E5AB";
+    ctx.font = "600 32px \"Plus Jakarta Sans\", sans-serif";
+    ctx.fillText("📍 Location: " + currentData.location, 110, 492);
 
-    ctx.fillStyle = "#D1D5DB";
-    ctx.font = "22px \"Plus Jakarta Sans\", sans-serif";
+    // Description text
+    ctx.fillStyle = "#E5E7EB";
+    ctx.font = "28px \"Plus Jakarta Sans\", sans-serif";
     const words = currentData.desc.split(" ");
     let line = "";
-    let y = 445;
+    let y = 560;
     words.forEach((w) => {
       const test = line + w + " ";
-      if (ctx.measureText(test).width > 860) {
-        ctx.fillText(line, 70, y);
+      if (ctx.measureText(test).width > 1000) {
+        ctx.fillText(line, 110, y);
         line = w + " ";
-        y += 34;
+        y += 45;
       } else {
         line = test;
       }
     });
-    ctx.fillText(line, 70, y);
+    ctx.fillText(line, 110, y);
 
-    // Handover Badge Box
-    ctx.fillStyle = "rgba(212, 175, 55, 0.2)";
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(70, 525, 320, 52, 12);
-    else ctx.rect(70, 525, 320, 52);
-    ctx.fill();
-    ctx.strokeStyle = "#D4AF37";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // 4 Spec Tags/Badges
+    const specs = currentData.specs || [];
+    specs.forEach((spec, index) => {
+      const specX = 110 + (index % 2) * 490;
+      const specY = 705 + Math.floor(index / 2) * 75;
 
+      ctx.fillStyle = "rgba(212, 175, 55, 0.20)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(specX, specY, 450, 62, 16);
+      else ctx.rect(specX, specY, 450, 62);
+      ctx.fill();
+
+      ctx.strokeStyle = "#D4AF37";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#F3E5AB";
+      ctx.font = "bold 24px \"Plus Jakarta Sans\", sans-serif";
+      ctx.fillText(`✨ ${spec}`, specX + 22, specY + 40);
+    });
+
+    // 5. Bottom Action Consultation Bar
     ctx.fillStyle = "#D4AF37";
-    ctx.font = "bold 20px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("✨ 100% Turnkey Handover Studio", 85, 558);
-
-    // WIDER BOTTOM BUTTON IN 3D WEB PANEL
-    ctx.fillStyle = "#D4AF37";
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(40, 680, width - 80, 85, 20);
-    else ctx.rect(40, 680, width - 80, 85);
+    if (ctx.roundRect) ctx.roundRect(60, 925, width - 120, 115, 24);
+    else ctx.rect(60, 925, width - 120, 115);
     ctx.fill();
 
     ctx.fillStyle = "#07090D";
-    ctx.font = "bold 26px \"Plus Jakarta Sans\", sans-serif";
+    ctx.font = "bold 38px \"Plus Jakarta Sans\", sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Tap Here to Consult for " + category, width / 2, 732);
-
-    ctx.fillStyle = "#A0A5B5";
-    ctx.font = "17px \"Plus Jakarta Sans\", sans-serif";
-    ctx.fillText("MM Interiors Vizag • Tap tabs above to switch 3D portfolio views", width / 2, 825);
+    ctx.fillText(`📅 TAP HERE TO BOOK CONSULTATION FOR ${category.toUpperCase()}`, width / 2, 995);
 
     if (portfolioTextureRef.current) {
       portfolioTextureRef.current.needsUpdate = true;
@@ -264,7 +476,7 @@ export default function ARExperience() {
 
     const initAR = async () => {
       console.log("==================================================");
-      console.log("🚀 [WebAR Visit] INITIALIZING ROBUST WEBAR ENGINE");
+      console.log("🚀 [WebAR Visit] INITIALIZING ROCK-SOLID WEBAR ENGINE");
       console.log("==================================================");
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -284,13 +496,15 @@ export default function ARExperience() {
       }
 
       try {
-        const videoTexture = initRobustVideoTexture();
+        const videoTexture = initBulletproofVideoTexture();
+        const fallbackTexture = createFallbackVideoTexture();
 
+        // Optimized OneEuroFilter settings for rock-solid tracking stability without jitter
         mindarThree = new MindARThree({
           container: containerRef.current,
           imageTargetSrc: "/card.mind",
-          filterMinCF: 0.0001,
-          filterBeta: 0.001,
+          filterMinCF: 0.0005,  // Extra smooth tracking filter
+          filterBeta: 0.01,     // Smooth motion dampening
           uiLoading: "no",
           uiScanning: "no",
           uiError: "no"
@@ -317,35 +531,108 @@ export default function ARExperience() {
         const anchor = mindarThree.addAnchor(0);
         anchorGroupRef.current = anchor.group;
 
+        // TARGET FOUND WITH PERSISTENCE TIMER RECOVERY
         anchor.onTargetFound = () => {
           console.log("🎯🎯🎯 [MindAR EVENT] TARGET FOUND!");
-          setTargetFound(true);
-          if (mainSpatialGroupRef.current) mainSpatialGroupRef.current.visible = true;
 
-          // Ensure video plays on target scan
+          if (targetLostTimerRef.current) {
+            clearTimeout(targetLostTimerRef.current);
+            targetLostTimerRef.current = null;
+          }
+
+          const isAlreadyActive = targetFoundRef.current;
+          setTargetFound(true);
+          targetFoundRef.current = true;
+
+          if (mainSpatialGroupRef.current) {
+            mainSpatialGroupRef.current.visible = true;
+          }
+
           if (videoElementRef.current) {
+            videoElementRef.current.muted = true;
             videoElementRef.current.play().catch(() => {});
           }
 
-          triggerToast("✨ MM Business Card Scanned!");
-          animatePremiumSlideEntrance();
+          if (!isAlreadyActive) {
+            triggerToast("✨ MM Business Card Scanned!");
+            animatePremiumSlideEntrance();
+          }
         };
 
+        // TARGET LOST WITH 3.5 SECOND PERSISTENCE GRACE PERIOD
         anchor.onTargetLost = () => {
-          console.log("⚠️ [MindAR EVENT] TARGET LOST!");
-          setTargetFound(false);
-          if (mainSpatialGroupRef.current) mainSpatialGroupRef.current.visible = false;
+          console.log("⚠️ [MindAR EVENT] TARGET LOST - Starting Persistence Grace Period...");
+
+          if (targetLostTimerRef.current) {
+            clearTimeout(targetLostTimerRef.current);
+          }
+
+          targetLostTimerRef.current = setTimeout(() => {
+            console.log("⚠️ [MindAR] Grace period expired. Hiding AR scene.");
+            setTargetFound(false);
+            targetFoundRef.current = false;
+            if (mainSpatialGroupRef.current) {
+              mainSpatialGroupRef.current.visible = false;
+            }
+          }, 3500);
         };
 
         // -------------------------------------------------------------
-        // SPATIAL 3D COMPOSITION
+        // PHYSICAL CARD CORNER TRACKER BRACKET (at 0,0,0)
+        // -------------------------------------------------------------
+        const createTargetTrackerFrame = () => {
+          const trackerGroup = new THREE.Group();
+
+          const cornerMat = new THREE.MeshBasicMaterial({ color: 0xD4AF37, transparent: true, opacity: 0.85 });
+          const cornerLength = 0.20;
+          const cornerThickness = 0.02;
+
+          const corners = [
+            { x: -0.5, y: 0.3, dx: 1, dy: -1 },
+            { x: 0.5, y: 0.3, dx: -1, dy: -1 },
+            { x: -0.5, y: -0.3, dx: 1, dy: 1 },
+            { x: 0.5, y: -0.3, dx: -1, dy: 1 }
+          ];
+
+          corners.forEach(({ x, y, dx, dy }) => {
+            const hGeo = new THREE.PlaneGeometry(cornerLength, cornerThickness);
+            const hMesh = new THREE.Mesh(hGeo, cornerMat);
+            hMesh.position.set(x + (dx * cornerLength / 2), y, 0.01);
+            trackerGroup.add(hMesh);
+
+            const vGeo = new THREE.PlaneGeometry(cornerThickness, cornerLength);
+            const vMesh = new THREE.Mesh(vGeo, cornerMat);
+            vMesh.position.set(x, y + (dy * cornerLength / 2), 0.01);
+            trackerGroup.add(vMesh);
+          });
+
+          // Holographic Laser Beam connecting physical card (0.5) to AR HUD (1.15)
+          const beamGeo = new THREE.PlaneGeometry(0.7, 0.02);
+          const beamMat = new THREE.MeshBasicMaterial({
+            color: 0xD4AF37,
+            transparent: true,
+            opacity: 0.65,
+            side: THREE.DoubleSide
+          });
+          const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+          beamMesh.position.set(0.85, 0, 0.01);
+          trackerGroup.add(beamMesh);
+
+          return trackerGroup;
+        };
+
+        anchor.group.add(createTargetTrackerFrame());
+
+        // -------------------------------------------------------------
+        // SPATIAL 3D COMPOSITION - Positioned at x = 1.15 (Right side of physical card)
         // -------------------------------------------------------------
         const mainSpatialGroup = new THREE.Group();
         mainSpatialGroupRef.current = mainSpatialGroup;
         mainSpatialGroup.visible = false;
+        mainSpatialGroup.position.set(1.15, 0, 0);
         mainSpatialGroup.scale.set(spatialScaleRef.current, spatialScaleRef.current, spatialScaleRef.current);
 
-        // 1. CENTER: 3D Business Card Base Box
+        // 1. CENTER SLOT (0,0,0): 3D Business Card Base Box (ALWAYS VISIBLE AT 0,0,0)
         const createBusinessCardTexture = () => {
           const canvas = document.createElement("canvas");
           canvas.width = 2048;
@@ -475,13 +762,18 @@ export default function ARExperience() {
           });
 
           const mesh = new THREE.Mesh(cardGeo, [goldSideMat, goldSideMat, goldSideMat, goldSideMat, frontMat, backMat]);
+          mesh.position.set(0, 0, 0);
+          mesh.scale.set(1.0, 1.0, 1.0);
+          mesh.visible = true;
+          mesh.name = "businessCardMesh";
+          mesh.userData = { action: "cardMesh" };
           cardMeshRef.current = mesh;
           return mesh;
         };
 
         mainSpatialGroup.add(createCardBaseMesh());
 
-        // 2. LEFT SIDE: 3D Extruded MM Monogram Logo
+        // 2. TOP-LEFT: 3D Extruded MM Monogram Logo (ALWAYS VISIBLE at -2.8, 1.1, 0.2)
         const createExtrudedMMLogo = () => {
           const mmGroup = new THREE.Group();
           const shape = new THREE.Shape();
@@ -532,24 +824,28 @@ export default function ARExperience() {
           mmMesh.name = "MMLogoMesh";
           mmGroup.add(mmMesh);
 
-          mmGroup.position.set(-2.8, 0, 0.3);
-          mmGroup.scale.set(0.85, 0.85, 0.85);
+          mmGroup.position.set(-2.8, 1.1, 0.2);
+          mmGroup.scale.set(0.7, 0.7, 0.7);
           mm3DGroupRef.current = mmGroup;
           return mmGroup;
         };
 
         mainSpatialGroup.add(createExtrudedMMLogo());
 
-        // 3. MIDDLE TOP: 3D Video Screen Plane
+        // 3. TOP-CENTER: 3D Video Screen Showcase (ALWAYS VISIBLE directly above card: y = 2.05)
         const createVideoScreenMesh = () => {
           const videoGeo = new THREE.PlaneGeometry(3.2, 1.8);
-          const videoMat = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
+          const initialMap = (videoElementRef.current && videoElementRef.current.readyState >= 2)
+            ? videoTexture
+            : fallbackTexture;
+
+          const videoMat = new THREE.MeshBasicMaterial({ map: initialMap, side: THREE.DoubleSide });
           const videoMesh = new THREE.Mesh(videoGeo, videoMat);
-          videoMesh.position.set(0, 2.2, 0.1);
+          videoMesh.position.set(0, 0, 0.03);
           videoMesh.name = "videoMesh";
           videoMeshRef.current = videoMesh;
 
-          const frameGeo = new THREE.BoxGeometry(3.32, 1.92, 0.05);
+          const frameGeo = new THREE.BoxGeometry(3.32, 1.92, 0.04);
           const frameMat = new THREE.MeshStandardMaterial({
             color: 0x141822,
             metalness: 0.9,
@@ -558,22 +854,68 @@ export default function ARExperience() {
             emissiveIntensity: 0.3
           });
           const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-          frameMesh.position.set(0, 2.2, 0.05);
+          frameMesh.position.set(0, 0, 0);
 
           const group = new THREE.Group();
           group.add(frameMesh);
           group.add(videoMesh);
+          group.position.set(0, 2.05, 0.05);
           videoGroupRef.current = group;
           return group;
         };
 
         mainSpatialGroup.add(createVideoScreenMesh());
 
-        // 4. RIGHT SIDE: 3D AR Portfolio Web Panel (Moved somewhat right to x = 4.2!)
+        // 4. RIGHT SIDE: Interactive 3D Tab Switcher Button Widget (ALWAYS VISIBLE at x = 2.25)
+        const createPortfolioSlideButton = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 360;
+          canvas.height = 100;
+          const ctx = canvas.getContext("2d");
+          slideBtnCanvasRef.current = canvas;
+
+          ctx.fillStyle = "#141822";
+          ctx.fillRect(0, 0, 360, 100);
+
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 6;
+          ctx.strokeRect(6, 6, 348, 88);
+
+          ctx.fillStyle = "#F3E5AB";
+          ctx.font = "bold 24px \"Plus Jakarta Sans\", sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("▶ SLIDE PORTFOLIO", 180, 60);
+
+          const texture = new THREE.CanvasTexture(canvas);
+          slideBtnTextureRef.current = texture;
+
+          const geo = new THREE.PlaneGeometry(1.4, 0.42);
+          const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(2.25, 0, 0.2);
+          mesh.name = "portfolioSlideButtonMesh";
+          mesh.userData = { action: "toggleView" };
+          slideBtnMeshRef.current = mesh;
+
+          const frameGeo = new THREE.BoxGeometry(1.44, 0.46, 0.04);
+          const frameMat = new THREE.MeshStandardMaterial({ color: 0x0B0E14, metalness: 0.9, roughness: 0.2 });
+          const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+          frameMesh.position.set(2.25, 0, 0.17);
+          frameMesh.userData = { action: "toggleView" };
+
+          const group = new THREE.Group();
+          group.add(frameMesh);
+          group.add(mesh);
+          return group;
+        };
+
+        mainSpatialGroup.add(createPortfolioSlideButton());
+
+        // 5. SLIDING PORTFOLIO SHOWCASE PANEL (Expanded Size: 4.8 x 2.7)
         const createPortfolioWebPanelMesh = () => {
           const portfolioCanvas = document.createElement("canvas");
-          portfolioCanvas.width = 1080;
-          portfolioCanvas.height = 960;
+          portfolioCanvas.width = 1920;
+          portfolioCanvas.height = 1080;
           const portfolioCtx = portfolioCanvas.getContext("2d");
           portfolioCanvasRef.current = portfolioCanvas;
           portfolioCtxRef.current = portfolioCtx;
@@ -582,13 +924,11 @@ export default function ARExperience() {
           portfolioTextureRef.current = portfolioTexture;
           renderPortfolioWebCanvas();
 
-          const webGeo = new THREE.PlaneGeometry(3.6, 3.3);
+          const webGeo = new THREE.PlaneGeometry(4.8, 2.7);
           const webMat = new THREE.MeshBasicMaterial({ map: portfolioTexture, side: THREE.DoubleSide });
           const portfolioWebMesh = new THREE.Mesh(webGeo, webMat);
 
-          // MOVED SOMEWHAT RIGHT: x = 4.2 (was 3.4)!
-          portfolioWebMesh.position.set(4.2, 0.5, 0.1);
-          portfolioWebMesh.rotation.y = -Math.PI / 12;
+          portfolioWebMesh.position.set(0, 0, 0.05);
           portfolioWebMesh.name = "portfolioWebMesh";
           portfolioWebMeshRef.current = portfolioWebMesh;
 
@@ -599,21 +939,25 @@ export default function ARExperience() {
             emissive: 0x221a00,
             emissiveIntensity: 0.3
           });
-          const webFrameGeo = new THREE.BoxGeometry(3.7, 3.4, 0.04);
+          const webFrameGeo = new THREE.BoxGeometry(4.92, 2.82, 0.04);
           const webFrameMesh = new THREE.Mesh(webFrameGeo, frameMat);
-          webFrameMesh.position.set(4.2, 0.5, 0.05);
-          webFrameMesh.rotation.y = -Math.PI / 12;
+          webFrameMesh.position.set(0, 0, 0);
 
           const group = new THREE.Group();
           group.add(webFrameMesh);
           group.add(portfolioWebMesh);
+
+          // Initially tucked behind card (scale 0, visible false)
+          group.position.set(2.25, 0.2, -0.1);
+          group.scale.set(0, 0, 0);
+          group.visible = false;
           portfolioGroupRef.current = group;
           return group;
         };
 
         mainSpatialGroup.add(createPortfolioWebPanelMesh());
 
-        // 5. BOTTOM 3D ACTION BUTTONS
+        // 6. BOTTOM: 3D ACTION BUTTONS (ALWAYS VISIBLE directly below card: y = -1.45)
         const createActionButtonsGroup = () => {
           const actionGroup = new THREE.Group();
           actionMeshesRef.current = [];
@@ -646,14 +990,14 @@ export default function ARExperience() {
             const geo = new THREE.PlaneGeometry(1.25, 0.38);
             const mat = new THREE.MeshBasicMaterial({ map: texture });
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(item.x, -1.8, 0.2);
+            mesh.position.set(item.x, -1.45, 0.12);
             mesh.name = `ActionMesh_${item.label}`;
             mesh.userData = item;
 
             const frameGeo = new THREE.BoxGeometry(1.29, 0.42, 0.02);
             const frameMat = new THREE.MeshStandardMaterial({ color: 0x0B0E14, metalness: 0.8, roughness: 0.2 });
             const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-            frameMesh.position.set(item.x, -1.8, 0.18);
+            frameMesh.position.set(item.x, -1.45, 0.1);
 
             const btnGroup = new THREE.Group();
             btnGroup.add(frameMesh);
@@ -668,7 +1012,7 @@ export default function ARExperience() {
 
         mainSpatialGroup.add(createActionButtonsGroup());
 
-        // 6. AMBIENT GOLD PARTICLES
+        // 7. AMBIENT GOLD PARTICLES
         const particleCount = 140;
         const pGeo = new THREE.BufferGeometry();
         const pPos = new Float32Array(particleCount * 3);
@@ -687,27 +1031,54 @@ export default function ARExperience() {
         // RAYCASTER HANDLER
         const handlePointerDown = (event) => {
           if (!mouseRef.current || !raycasterRef.current || !cameraRef.current) return;
+
+          // Ignore touches on UI overlay elements (like floating HTML buttons)
+          if (event.target && event.target.closest && event.target.closest("button")) {
+            return;
+          }
+
           mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
           mouseRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
           raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
 
-          const intersects = raycasterRef.current.intersectObjects([
-            portfolioWebMeshRef.current,
+          // Only raycast against active, visible objects whose parent group is visible
+          const candidateObjects = [
+            slideBtnMeshRef.current,
+            portfolioGroupRef.current && portfolioGroupRef.current.visible ? portfolioWebMeshRef.current : null,
             videoMeshRef.current,
             mm3DGroupRef.current,
+            cardMeshRef.current,
             ...actionMeshesRef.current
-          ].filter(Boolean), true);
+          ].filter((obj) => obj && obj.visible && (!obj.parent || obj.parent.visible));
+
+          const intersects = raycasterRef.current.intersectObjects(candidateObjects, true);
 
           if (intersects.length > 0) {
             const hit = intersects[0];
             const hitMesh = hit.object;
 
-            if (hitMesh === portfolioWebMeshRef.current && hit.uv) {
+            let isSlideToggleHit = false;
+            let currentObj = hitMesh;
+            while (currentObj) {
+              if (
+                currentObj === slideBtnMeshRef.current ||
+                currentObj.name === "portfolioSlideButtonMesh" ||
+                (currentObj.userData && currentObj.userData.action === "toggleView")
+              ) {
+                isSlideToggleHit = true;
+                break;
+              }
+              currentObj = currentObj.parent;
+            }
+
+            if (isSlideToggleHit) {
+              togglePortfolioSlide(event);
+            } else if (hitMesh === portfolioWebMeshRef.current && hit.uv) {
               const tapY = 1.0 - hit.uv.y;
               const uvX = hit.uv.x;
 
-              if (tapY >= 0.15 && tapY <= 0.22) {
+              if (tapY >= 0.12 && tapY <= 0.25) {
                 let cat = "Living Room";
                 if (uvX < 0.25) cat = "Living Room";
                 else if (uvX >= 0.25 && uvX < 0.50) cat = "Kitchen";
@@ -716,11 +1087,21 @@ export default function ARExperience() {
 
                 setSelectedCategory(cat);
                 triggerToast("Portfolio View: " + cat);
-              } else if (tapY >= 0.70 && tapY <= 0.82) {
+              } else if (tapY >= 0.82) {
                 setShowConsultModal(true);
               }
             } else if (hitMesh.name === "MMLogoMesh" || (mm3DGroupRef.current && (hitMesh === mm3DGroupRef.current || hitMesh.parent === mm3DGroupRef.current))) {
               triggerMMLogoElevation();
+            } else if (hitMesh === videoMeshRef.current || (videoGroupRef.current && hitMesh.parent === videoGroupRef.current)) {
+              if (videoElementRef.current) {
+                if (videoElementRef.current.paused) {
+                  videoElementRef.current.play();
+                  triggerToast("▶ Playing Interior Video");
+                } else {
+                  videoElementRef.current.pause();
+                  triggerToast("⏸ Paused Video");
+                }
+              }
             } else if (hitMesh.userData && hitMesh.userData.action === "consultation") {
               console.log("[Raycaster] Consultation Button Clicked");
               setShowConsultModal(true);
@@ -785,6 +1166,7 @@ export default function ARExperience() {
         console.log("✅ [MindAR] Camera Feed Active!");
         setArStarted(true);
 
+        // MAIN ANIMATION LOOP
         renderer.setAnimationLoop(() => {
           if (mm3DGroupRef.current) {
             mm3DGroupRef.current.rotation.y += 0.008;
@@ -795,10 +1177,26 @@ export default function ARExperience() {
           if (dirLightRef.current) {
             dirLightRef.current.intensity = 2.0 + Math.sin(Date.now() * 0.003) * 0.4;
           }
-          // Update Video Texture continuously
-          if (videoTextureRef.current) {
-            videoTextureRef.current.needsUpdate = true;
+
+          // Smart texture swap for video plane
+          if (videoMeshRef.current && videoElementRef.current) {
+            const video = videoElementRef.current;
+            if (video.readyState >= 2 && !video.paused) {
+              if (videoMeshRef.current.material.map !== videoTextureRef.current) {
+                videoMeshRef.current.material.map = videoTextureRef.current;
+                videoMeshRef.current.material.needsUpdate = true;
+              }
+              if (videoTextureRef.current) {
+                videoTextureRef.current.needsUpdate = true;
+              }
+            } else {
+              if (videoMeshRef.current.material.map !== fallbackVideoTextureRef.current) {
+                videoMeshRef.current.material.map = fallbackVideoTextureRef.current;
+                videoMeshRef.current.material.needsUpdate = true;
+              }
+            }
           }
+
           renderer.render(scene, camera);
         });
 
@@ -822,41 +1220,78 @@ export default function ARExperience() {
   const animatePremiumSlideEntrance = () => {
     console.log("✨ [GSAP Animation] Triggering Ultra-Premium 3D Spatial Slide Entrance Sequence");
 
+    const targetX = isPortfolioSlidOutRef.current ? -0.3 : 1.15;
+    if (mainSpatialGroupRef.current) {
+      gsap.fromTo(
+        mainSpatialGroupRef.current.position,
+        { x: 5.0, y: 0, z: 0 },
+        { x: targetX, y: 0, z: 0, duration: 1.0, ease: "power3.out" }
+      );
+    }
+
     if (mm3DGroupRef.current) {
       gsap.fromTo(
         mm3DGroupRef.current.position,
-        { x: -6.0, y: 0, z: 0.3 },
-        { x: -2.6, y: 0, z: 0.3, duration: 1.2, ease: "power3.out" }
+        { x: -5.0, y: 1.1, z: 0.2 },
+        { x: -2.8, y: 1.1, z: 0.2, duration: 1.0, ease: "power3.out" }
       );
       gsap.fromTo(
         mm3DGroupRef.current.rotation,
         { y: -Math.PI * 2 },
-        { y: 0, duration: 1.2, ease: "power3.out" }
+        { y: 0, duration: 1.0, ease: "power3.out" }
       );
     }
 
     if (videoGroupRef.current) {
+      videoGroupRef.current.visible = true;
+      videoGroupRef.current.position.set(0, 2.05, 0.05);
       gsap.fromTo(
         videoGroupRef.current.position,
-        { x: 0, y: 6.0, z: 0.1 },
-        { x: 0, y: 0, z: 0, duration: 1.1, ease: "back.out(1.4)", delay: 0.1 }
+        { x: 0, y: 5.0, z: 0.05 },
+        { x: 0, y: 2.05, z: 0.05, duration: 0.9, ease: "back.out(1.4)", delay: 0.1 }
       );
     }
 
-    if (portfolioGroupRef.current) {
-      gsap.fromTo(
-        portfolioGroupRef.current.position,
-        { x: 7.5, y: 0.5, z: 0.1 },
-        { x: 0, y: 0, z: 0, duration: 1.2, ease: "power3.out", delay: 0.2 }
-      );
-    }
-
+    // Business Card is ALWAYS ACTIVE at (0,0,0)
     if (cardMeshRef.current) {
+      cardMeshRef.current.visible = true;
+      cardMeshRef.current.position.set(0, 0, 0);
+      cardMeshRef.current.scale.set(1.0, 1.0, 1.0);
+      cardMeshRef.current.rotation.set(0, 0, 0);
       gsap.fromTo(
         cardMeshRef.current.position,
         { z: -1.5 },
-        { z: 0, duration: 1.0, ease: "power2.out" }
+        { z: 0, duration: 0.9, ease: "power2.out" }
       );
+    }
+
+    // Preserve Portfolio state if already slid out, otherwise tuck behind card
+    if (portfolioGroupRef.current) {
+      if (isPortfolioSlidOutRef.current) {
+        portfolioGroupRef.current.visible = true;
+        portfolioGroupRef.current.position.set(2.7, 0.0, 0.15);
+        portfolioGroupRef.current.scale.set(1.05, 1.05, 1.05);
+      } else {
+        portfolioGroupRef.current.visible = false;
+        portfolioGroupRef.current.position.set(2.25, 0.0, -0.1);
+        portfolioGroupRef.current.scale.set(0, 0, 0);
+        portfolioGroupRef.current.rotation.set(0, 0, 0);
+      }
+    }
+
+    if (slideBtnCanvasRef.current && slideBtnTextureRef.current) {
+      const isSlidOut = isPortfolioSlidOutRef.current;
+      const ctx = slideBtnCanvasRef.current.getContext("2d");
+      ctx.fillStyle = isSlidOut ? "#D4AF37" : "#141822";
+      ctx.fillRect(0, 0, 360, 100);
+      ctx.strokeStyle = "#D4AF37";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(6, 6, 348, 88);
+      ctx.fillStyle = isSlidOut ? "#07090D" : "#F3E5AB";
+      ctx.font = "bold 24px \"Plus Jakarta Sans\", sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(isSlidOut ? "◀ HIDE PORTFOLIO" : "▶ SLIDE PORTFOLIO", 180, 60);
+      slideBtnTextureRef.current.needsUpdate = true;
     }
   };
 
@@ -866,10 +1301,10 @@ export default function ARExperience() {
     const group = mm3DGroupRef.current;
 
     const tl = gsap.timeline();
-    tl.to(group.position, { z: 1.8, y: 0.3, duration: 1.0, ease: "back.out(1.7)" })
-      .to(group.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 1.0, ease: "back.out(1.7)" }, "<")
-      .to(group.position, { x: -2.6, y: 0, z: 0.3, duration: 0.8, ease: "power3.out" })
-      .to(group.scale, { x: 0.85, y: 0.85, z: 0.85, duration: 0.8, ease: "power3.out" }, "<");
+    tl.to(group.position, { z: 1.8, y: 1.4, duration: 1.0, ease: "back.out(1.7)" })
+      .to(group.scale, { x: 1.0, y: 1.0, z: 1.0, duration: 1.0, ease: "back.out(1.7)" }, "<")
+      .to(group.position, { x: -2.8, y: 1.1, z: 0.2, duration: 0.8, ease: "power3.out" })
+      .to(group.scale, { x: 0.7, y: 0.7, z: 0.7, duration: 0.8, ease: "power3.out" }, "<");
   };
 
   const handleZoom = (direction) => {
@@ -883,9 +1318,9 @@ export default function ARExperience() {
   };
 
   const resetZoom = () => {
-    spatialScaleRef.current = 0.42;
+    spatialScaleRef.current = 0.38;
     if (mainSpatialGroupRef.current) {
-      mainSpatialGroupRef.current.scale.set(0.42, 0.42, 0.42);
+      mainSpatialGroupRef.current.scale.set(0.38, 0.38, 0.38);
     }
     triggerToast("🔄 Zoom Level Reset");
   };
@@ -901,6 +1336,28 @@ export default function ARExperience() {
     <div className="fixed inset-0 w-full h-full bg-black overflow-hidden select-none">
       {/* MindAR Camera Feed Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full z-0"></div>
+
+      {/* FLOATING SLIDE PORTFOLIO OVERLAY BUTTON */}
+      {arStarted && targetFound && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 glass-panel p-1.5 rounded-full border-gold-500/60 shadow-2xl">
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              togglePortfolioSlide(e);
+            }}
+            className={`px-5 py-2 rounded-full font-bold text-xs tracking-wider transition-all ${
+              isPortfolioSlidOut
+                ? "gold-btn shadow-lg"
+                : "bg-charcoal-900 text-gold-300 border border-gold-500/40 hover:bg-gold-500 hover:text-charcoal-950"
+            }`}
+          >
+            {isPortfolioSlidOut ? "◀ Hide Portfolio" : "▶ Slide Out Portfolio"}
+          </button>
+        </div>
+      )}
 
       {/* FLOATING ZOOM CONTROLS FOR PHONE TOUCH & DESKTOP */}
       {arStarted && targetFound && (
